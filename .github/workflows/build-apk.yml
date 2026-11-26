@@ -1,59 +1,122 @@
-name: Build HostTerminal Debug APK
+name: Build & Release HostTerminal APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   pull_request:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release-apk-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-apk:
-    name: Assemble Debug APK
+    name: Assemble Debug APK & Publish Release
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up JDK 17 (Temurin)
+      - name: Set up JDK 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
+          java-version: '21'
 
-      - name: Setup Android SDK
+      - name: Setup Android SDK & Accept Licenses
         uses: android-actions/setup-android@v3
 
-      - name: Grant execute permission for gradlew
+      - name: Accept Android SDK Licenses
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-          fi
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
 
-      - name: Ensure debug keystore exists
+      - name: Setup Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Restore or Generate Debug Keystore
         run: |
           if [ ! -f "debug.keystore" ]; then
-            keytool -genkey -v \
-              -keystore debug.keystore \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
+            if [ -f "debug.keystore.base64" ]; then
+              base64 -d debug.keystore.base64 > debug.keystore
+            else
+              keytool -genkey -v \
+                -keystore debug.keystore \
+                -storepass android \
+                -alias androiddebugkey \
+                -keypass android \
+                -keyalg RSA \
+                -keysize 2048 \
+                -validity 10000 \
+                -dname "CN=Android Debug,O=Android,C=US"
+            fi
           fi
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Prepare Release APK File
+        run: |
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "ERROR: Expected APK not found at $APK_PATH"
+            exit 1
+          fi
+          cp "$APK_PATH" HostTerminal-latest.apk
+          ls -lh HostTerminal-latest.apk
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: HostTerminal-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            HostTerminal-latest.apk
           retention-days: 30
           if-no-files-found: error
+
+      - name: Publish GitHub Release (latest-apk)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          TAG="latest-apk"
+          COMMIT_SHORT="$(git rev-parse --short HEAD)"
+          COMMIT_MSG="$(git log -1 --pretty=%s)"
+          BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+          # Move rolling latest-apk tag to the latest commit
+          git tag -fa "$TAG" -m "HostTerminal Latest APK ($COMMIT_SHORT)"
+          git push origin "refs/tags/$TAG" --force
+
+          RELEASE_NOTES=$(printf "## HostTerminal — Latest Debug APK (100%% Ad-Free)\n\n- **Commit:** \`%s\` — %s\n- **Built:** %s\n- **Install:** Download **HostTerminal-latest.apk** below and install on Android.\n" "$COMMIT_SHORT" "$COMMIT_MSG" "$BUILD_DATE")
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" HostTerminal-latest.apk --clobber
+            gh release edit "$TAG" \
+              --title "HostTerminal Latest APK" \
+              --notes "$RELEASE_NOTES" \
+              --latest
+          else
+            gh release create "$TAG" HostTerminal-latest.apk \
+              --title "HostTerminal Latest APK" \
+              --notes "$RELEASE_NOTES" \
+              --latest
+          fi
