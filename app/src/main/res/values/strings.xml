@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">HostTerminal</string>
+    <string name="tagline_subtitle">Linux Terminal • Bot &amp; Web Cloud • Cloudflared Tunnel</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_terminal">Terminal</string>
+    <string name="nav_hosting">Hosting</string>
+    <string name="nav_admin">Admin</string>
+    <string name="action_new_tab">New Tab</string>
+    <string name="action_start_verify">Start &amp; Verify</string>
+    <string name="action_verify_otp">Verify OTP</string>
+    <string name="action_copy_link">Copy Link</string>
+    <string name="action_share_link">Share</string>
+    <string name="action_stop_tunnel">Stop</string>
+    <string name="action_restart_tunnel">Restart</string>
+    <string name="action_upload_zip">Upload ZIP</string>
+    <string name="action_upload_file">Upload File</string>
+    <string name="service_notification_title">HostTerminal Background Engine</string>
+    <string name="service_notification_text">Bots, web servers &amp; Cloudflared tunnels active</string>
+    <string name="ad_free_badge">100% AD-FREE</string>
+</resources>

@@ -1,0 +1,6 @@
+{
+  "name": "HostTerminal",
+  "description": "Ad-free multi-tab Linux terminal emulator with intelligent Cloudflared tunneling, zero-code Telegram Bot & Web Hosting, Chat ID OTP authentication, and Super Admin control panel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
